@@ -49,8 +49,8 @@ if ($hassiteconfig) {
     $ADMIN->add($component, $settings);
 
     $ADMIN->add($component, new admin_externalpage(
-        $component . '_suspensions',
-        new lang_string('suspensions', $component),
+        $component . '_manage',
+        new lang_string('manageenrolments', $component),
         new moodle_url('/local/rvc_enrolment_management/index.php'),
         'moodle/site:config'
     ));

@@ -37,7 +37,7 @@ $filters = [
     'method' => optional_param('method', '', PARAM_ALPHANUMEXT),
 ];
 
-admin_externalpage_setup('local_rvc_enrolment_management_suspensions', '', array_filter($filters));
+admin_externalpage_setup('local_rvc_enrolment_management_manage', '', array_filter($filters));
 require_admin();
 
 // The filters live in the page address, so the browser's Back button keeps them.
@@ -58,7 +58,7 @@ if ($data = $form->get_data()) {
 }
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(get_string('suspensions', 'local_rvc_enrolment_management'));
+echo $OUTPUT->heading(get_string('manageenrolments', 'local_rvc_enrolment_management'));
 $form->display();
 $table = new courses_table($filters, $PAGE->url);
 $table->out(50, false);

@@ -22,7 +22,7 @@ Design agreed with Brian on 2026-10-22. Nothing is built yet.
 - **Site administrators only.** Every page and action calls `require_admin()`. There are
   no custom capabilities. A read-only view for other staff would be a separate plugin.
 - **Menus:** Site administration > Plugins > Local plugins > RVC Enrolment Management has
-  only two entries: **Settings** and **Suspensions**. There are no links in courses or
+  only two entries: **Settings** and **Manage enrolments** (renamed from Suspensions on 2026-10-23). There are no links in courses or
   anywhere else.
 - **Both methods are in scope:** core `database` and CoSector `databaseextendedv2`.
 - **Any enrolled person** can be suspended, whatever their role.
@@ -137,7 +137,7 @@ A Privacy API provider (metadata, export, delete, userlist) covers it.
 - Days before deletion is allowed (default 3).
 - Batch warning threshold, as a percentage (default 50).
 
-### Suspensions: find a course
+### Manage enrolments: find a course
 
 **Filters** (a Moodle form submitted by GET, so the web address keeps them and the
 browser's Back button works). Every filled-in filter must match:
@@ -160,7 +160,7 @@ browser's Back button works). Every filled-in filter must match:
 - Opening a row goes to the course page.
 - No feed queries run from this screen.
 
-### Suspensions: course page
+### Manage enrolments: course page
 
 1. **Course details:** ID, ID number, short name, full name, category path, visibility
    and an "Open course" link (new tab).
@@ -217,12 +217,14 @@ its effect.
 - [x] **M3 Find a course:** filters, category hierarchy, reset, results table. Built
       2026-10-23 (v0.2.0) with 8 PHPUnit tests; not yet seen in a browser. Course rows
       link to `course.php`, which is a placeholder until M4.
-- [ ] **M4 Course page and suspend:** sections 1–6, confirm, re-check, record.
+- [x] **M4 Course page and suspend:** sections 1–6, confirm, re-check, record. Built
+      2026-10-23 (v0.3.0) with 7 more PHPUnit tests (33 in all). The course page's
+      tool-suspension list has no actions yet; re-activate and delete come in M5.
 - [ ] **M5 Re-activate and delete:** both confirm flows and the deletion delay.
 - [ ] **M6 learn-uat validation** against `Moodle_Snapshot_UAT` and the extended feed.
 - [ ] **Playground rerun:** once Brian has installed the plugin through
-      `configs/moodle.yaml`, rerun the full PHPUnit suite on the playground. Ask
-      Brian first if the PHPUnit environment needs initialising.
+      `configs/moodle.yaml`, rerun the full PHPUnit suite on the playground
+      (initialising its PHPUnit environment if needed).
 
 ## Open
 
