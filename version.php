@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_rvc_enrolment_management';
-$plugin->version   = 2026102302;
+$plugin->version   = 2026102303;
 $plugin->requires  = 2024100700; // Moodle 4.5 LTS.
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = 'v0.3.0';
+$plugin->release   = 'v0.4.0';

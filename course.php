@@ -218,10 +218,17 @@ if ($listed->data) {
     echo html_writer::table($listed);
 }
 
-// 5. Suspended by this tool, and 6. suspended by something else (information only).
+// 5. Suspended by this tool (re-activate or delete), and 6. suspended by something else (information only).
 $delay = (int) get_config($component, 'deletiondelaydays');
 $tool = new html_table();
+$toolmaster = new \core\output\checkbox_toggleall('rvcem-tool', true, [
+    'id' => 'rvcem-tool-selectall',
+    'name' => 'toolselectall',
+    'label' => get_string('selectall'),
+    'labelclasses' => 'visually-hidden',
+]);
 $tool->head = [
+    $OUTPUT->render($toolmaster),
     get_string('name'),
     get_string('method', $component),
     get_string('suspendedon', $component),
@@ -240,13 +247,22 @@ foreach ($methods as $method) {
     $suspended = course_data::suspended($course->id, $method);
     foreach ($suspended['tool'] as $row) {
         $admin = fullname(username_load_fields_from_object(new stdClass(), $row, 'admin'));
+        $deletable = (int) $row->timesuspended + $delay * DAYSECS;
+        $tick = new \core\output\checkbox_toggleall('rvcem-tool', false, [
+            'id' => 'rvcem-tool' . $row->suspensionid,
+            'name' => 'suspensionids[]',
+            'value' => $row->suspensionid,
+            'label' => fullname($row),
+            'labelclasses' => 'visually-hidden',
+        ]);
         $tool->data[] = [
+            $OUTPUT->render($tick),
             $person($row),
             $methodname($method),
             $date((int) $row->timesuspended),
             s($admin),
             s((string) $row->reason),
-            $date((int) $row->timesuspended + $delay * DAYSECS),
+            $deletable <= time() ? get_string('now') : $date($deletable),
         ];
     }
     foreach ($suspended['elsewhere'] as $row) {
@@ -255,7 +271,19 @@ foreach ($methods as $method) {
 }
 echo $OUTPUT->heading(get_string('toolheading', $component, count($tool->data)), 3);
 if ($tool->data) {
+    $actionurl = new moodle_url('/local/rvc_enrolment_management/action.php', ['courseid' => $course->id]);
+    echo html_writer::start_tag('form', ['method' => 'post', 'action' => $actionurl->out(false)]);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
     echo html_writer::table($tool);
+    foreach (['reactivate' => 'btn-secondary', 'delete' => 'btn-danger'] as $action => $class) {
+        echo html_writer::tag('button', get_string($action . 'selected', $component), [
+            'type' => 'submit',
+            'name' => 'action',
+            'value' => $action,
+            'class' => "btn $class me-2",
+        ]);
+    }
+    echo html_writer::end_tag('form');
 }
 echo $OUTPUT->heading(get_string('elsewhereheading', $component, count($elsewhere->data)), 3);
 if ($elsewhere->data) {

@@ -220,11 +220,67 @@ its effect.
 - [x] **M4 Course page and suspend:** sections 1–6, confirm, re-check, record. Built
       2026-10-23 (v0.3.0) with 7 more PHPUnit tests (33 in all). The course page's
       tool-suspension list has no actions yet; re-activate and delete come in M5.
-- [ ] **M5 Re-activate and delete:** both confirm flows and the deletion delay.
+- [x] **M5 Re-activate and delete:** both confirm flows and the deletion delay. Built
+      2026-10-23 (v0.4.0) with 5 more PHPUnit tests.
 - [ ] **M6 learn-uat validation** against `Moodle_Snapshot_UAT` and the extended feed.
+      Checklist below.
 - [ ] **Playground rerun:** once Brian has installed the plugin through
       `configs/moodle.yaml`, rerun the full PHPUnit suite on the playground
       (initialising its PHPUnit environment if needed).
+
+## M6 learn-uat validation checklist
+
+No code is expected for M6. Stop at the first failure and report which step it was.
+
+**Before testing (Brian and the hosting partner)**
+
+1. learn-uat's core `enrol_database` points at `Moodle_Snapshot_UAT`, and its sync runs.
+2. The plugin is deployed to learn-uat at version 2026102303 or later, and the upgrade
+   has run.
+3. Agree a test course and one or two test people whose enrolments can be suspended and
+   deleted. Set "Days before deletion" to 0 for the test, then back to 3 afterwards.
+4. Note that learn-uat's MIS was reading the live feed views, not the `_UAT` ones, when
+   last checked. If that is still so, the Extended feed on learn-uat is live data.
+
+**Read-only checks**
+
+1. Site administration → Plugins → Local plugins → RVC Enrolment Management shows
+   Settings (3 and 50 by default) and Manage enrolments.
+2. The search finds a known current-year course by ID number words, and by category.
+3. **A core Database course:**
+   - The card reads "Database · ODBC (SQL Server) · Moodle_Snapshot_UAT", "Feed connected"
+     and "This course is in the current feed (N rows)".
+   - N matches the number of `COURSE_ENROLMENT` rows for that course's ID number in
+     `Moodle_Snapshot_UAT`.
+4. **A Veterinary Nursing (Extended) course:** the card reads "Extended · MySQL", then either:
+   - "Feed connected": the extended plugin's own connection code worked; or
+   - "Enrolment management for Extended is suspended until access to MySQL is restored":
+     the CoSector plugin doesn't offer the same connection functions as core. Report it;
+     the fix needs its code.
+5. A previous-year course shows "not in the current feed", with everyone under "Not in
+   the feed".
+6. **Spot checks** for one course:
+   - Three people under "Not in the feed" have no feed row for that course.
+   - Three under "Still in the feed" do have one.
+
+**Changes, on the agreed test people only**
+
+1. **Suspend** one person with a reason. The results page says 1 suspended, and the course
+   page lists them under "Suspended by this tool" with the reason.
+2. **Re-activate** them, and check that the enrolment is active again. For an Extended
+   person, the plugin's next nightly sync may suspend them again.
+3. **Suspend and delete:**
+   - Suspend them again, then delete them.
+   - The confirm page shows the consequences, and flags "last enrolment in this course"
+     where it applies.
+   - Afterwards, the course's Participants page no longer lists that enrolment.
+4. **Batch warning:**
+   - In a small course, tick more than half the people under "Not in the feed" and
+     choose Suspend selected.
+   - The warning appears, and Confirm needs the "I understand" tick. Cancel without
+     suspending.
+
+**Report back:** which steps passed, a screenshot of each feed card, and any error text.
 
 ## Open
 
