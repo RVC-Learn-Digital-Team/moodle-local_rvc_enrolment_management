@@ -27,7 +27,6 @@ namespace local_rvc_enrolment_management\local;
  * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class course_review {
-
     /** @var feed_result What the feed said about the course. */
     public $feed;
 

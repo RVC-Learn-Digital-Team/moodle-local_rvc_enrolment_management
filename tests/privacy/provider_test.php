@@ -30,6 +30,8 @@ use core_privacy\local\request\writer;
  * @covers    \local_rvc_enrolment_management\privacy\provider
  */
 final class provider_test extends \core_privacy\tests\provider_testcase {
+    /** @var string Component name. */
+    const COMPONENT = 'local_rvc_enrolment_management';
 
     /** @var \stdClass[] Courses. */
     protected $courses;
@@ -118,8 +120,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
      * A subject's rows are exported with the reason.
      */
     public function test_export_user_data(): void {
-        $contextlist = new approved_contextlist($this->users['subject1'], 'local_rvc_enrolment_management',
-            [$this->context(0)->id]);
+        $contextlist = new approved_contextlist($this->users['subject1'], self::COMPONENT, [$this->context(0)->id]);
         provider::export_user_data($contextlist);
 
         $data = writer::with_context($this->context(0))->get_data([get_string('pluginname', 'local_rvc_enrolment_management')]);
@@ -132,14 +133,12 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
      */
     public function test_delete_data_for_subject_keeps_other_courses(): void {
         global $DB;
-        $contextlist = new approved_contextlist($this->users['subject1'], 'local_rvc_enrolment_management',
-            [$this->context(0)->id]);
+        $contextlist = new approved_contextlist($this->users['subject1'], self::COMPONENT, [$this->context(0)->id]);
         provider::delete_data_for_user($contextlist);
 
-        $this->assertFalse($DB->record_exists(provider::TABLE,
-            ['courseid' => $this->courses[0]->id, 'userid' => $this->users['subject1']->id]));
-        $this->assertTrue($DB->record_exists(provider::TABLE,
-            ['courseid' => $this->courses[1]->id, 'userid' => $this->users['subject1']->id]));
+        $subject = $this->users['subject1']->id;
+        $this->assertFalse($DB->record_exists(provider::TABLE, ['courseid' => $this->courses[0]->id, 'userid' => $subject]));
+        $this->assertTrue($DB->record_exists(provider::TABLE, ['courseid' => $this->courses[1]->id, 'userid' => $subject]));
     }
 
     /**
@@ -147,8 +146,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
      */
     public function test_delete_data_for_administrator_blanks_them_but_keeps_rows(): void {
         global $DB;
-        $contextlist = new approved_contextlist($this->users['admin1'], 'local_rvc_enrolment_management',
-            [$this->context(0)->id]);
+        $contextlist = new approved_contextlist($this->users['admin1'], self::COMPONENT, [$this->context(0)->id]);
         provider::delete_data_for_user($contextlist);
 
         $this->assertEquals(2, $DB->count_records(provider::TABLE, ['courseid' => $this->courses[0]->id]));
@@ -160,15 +158,14 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
      */
     public function test_delete_data_for_users(): void {
         global $DB;
-        $userlist = new approved_userlist($this->context(0), 'local_rvc_enrolment_management',
-            [$this->users['subject2']->id, $this->users['admin2']->id]);
+        $userids = [$this->users['subject2']->id, $this->users['admin2']->id];
+        $userlist = new approved_userlist($this->context(0), self::COMPONENT, $userids);
         provider::delete_data_for_users($userlist);
 
+        $admin2 = $this->users['admin2']->id;
         $this->assertFalse($DB->record_exists(provider::TABLE, ['userid' => $this->users['subject2']->id]));
-        $this->assertFalse($DB->record_exists(provider::TABLE,
-            ['courseid' => $this->courses[0]->id, 'reactivatedby' => $this->users['admin2']->id]));
-        $this->assertTrue($DB->record_exists(provider::TABLE,
-            ['courseid' => $this->courses[1]->id, 'suspendedby' => $this->users['admin2']->id]));
+        $this->assertFalse($DB->record_exists(provider::TABLE, ['courseid' => $this->courses[0]->id, 'reactivatedby' => $admin2]));
+        $this->assertTrue($DB->record_exists(provider::TABLE, ['courseid' => $this->courses[1]->id, 'suspendedby' => $admin2]));
     }
 
     /**

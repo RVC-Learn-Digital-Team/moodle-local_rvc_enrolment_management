@@ -30,7 +30,6 @@ namespace local_rvc_enrolment_management\local;
  * @covers    \local_rvc_enrolment_management\local\course_review
  */
 final class course_review_test extends \advanced_testcase {
-
     /** @var string Feed table created in the test database. */
     const FEEDTABLE = 'local_rvcem_test_feed';
 
@@ -284,7 +283,14 @@ final class course_review_test extends \advanced_testcase {
      * An enrol plugin without db_init() or db_get_sql() makes the feed unavailable.
      */
     public function test_plugin_without_connection_code_makes_feed_unavailable(): void {
-        $reader = new class('database') extends feed_reader {
+        $reader = new class ('database') extends feed_reader {
+            /**
+             * Behaves as if the enrol plugin lacked the method.
+             *
+             * @param string $name method name
+             * @param mixed ...$args
+             * @return mixed
+             */
             protected function call(string $name, ...$args) {
                 throw new \ReflectionException('Method does not exist');
             }

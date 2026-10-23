@@ -24,7 +24,6 @@ namespace local_rvc_enrolment_management\local;
  * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class feed_result {
-
     /** @var bool False when the feed could not be read; nothing may then be suspended. */
     public $available;
 

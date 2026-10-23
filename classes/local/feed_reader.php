@@ -30,7 +30,6 @@ namespace local_rvc_enrolment_management\local;
  * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class feed_reader {
-
     /** @var string[] Enrol methods this plugin manages. */
     const METHODS = ['database', 'databaseextendedv2'];
 

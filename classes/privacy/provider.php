@@ -37,9 +37,8 @@ use core_privacy\local\request\writer;
  */
 class provider implements
     \core_privacy\local\metadata\provider,
-    \core_privacy\local\request\plugin\provider,
-    \core_privacy\local\request\core_userlist_provider {
-
+    \core_privacy\local\request\core_userlist_provider,
+    \core_privacy\local\request\plugin\provider {
     /** @var string Suspension record table. */
     const TABLE = 'local_rvc_enrolment_management_suspension';
 
@@ -115,8 +114,9 @@ class provider implements
             if (!$context instanceof \context_course) {
                 continue;
             }
-            $records = $DB->get_records_select(self::TABLE, "courseid = :courseid AND ($where)",
-                $params + ['courseid' => $context->instanceid], 'timesuspended, id');
+            $select = "courseid = :courseid AND ($where)";
+            $selectparams = $params + ['courseid' => $context->instanceid];
+            $records = $DB->get_records_select(self::TABLE, $select, $selectparams, 'timesuspended, id');
             if (!$records) {
                 continue;
             }
