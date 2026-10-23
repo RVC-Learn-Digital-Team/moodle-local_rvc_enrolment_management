@@ -214,7 +214,9 @@ its effect.
 - [x] **M2 Feed reader and eligibility:** the reflection-based reader, matching rules and
       feed-unavailable handling, with PHPUnit. 18 tests pass on PostgreSQL 16 in the
       playground; MySQL 8.4 waits for CI.
-- [ ] **M3 Find a course:** filters, category hierarchy, reset, results table.
+- [x] **M3 Find a course:** filters, category hierarchy, reset, results table. Built
+      2026-10-23 (v0.2.0) with 8 PHPUnit tests; not yet seen in a browser. Course rows
+      link to `course.php`, which is a placeholder until M4.
 - [ ] **M4 Course page and suspend:** sections 1–6, confirm, re-check, record.
 - [ ] **M5 Re-activate and delete:** both confirm flows and the deletion delay.
 - [ ] **M6 learn-uat validation** against `Moodle_Snapshot_UAT` and the extended feed.
