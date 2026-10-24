@@ -185,4 +185,29 @@ final class course_filter_test extends \advanced_testcase {
         $this->assertEquals(1, $rows[0]->dbsuspended);
         $this->assertEmpty($rows[0]->extinstances);
     }
+
+    /**
+     * Sorting by the Database column puts the most suspended courses first.
+     */
+    public function test_table_sorts_by_suspended_count(): void {
+        global $DB;
+        $plugin = enrol_get_plugin('database');
+        $generator = $this->getDataGenerator();
+        foreach (['loc' => 1, 'msc' => 2] as $course => $suspended) {
+            $instance = $DB->get_record('enrol', ['courseid' => $this->courses[$course]->id, 'enrol' => 'database']);
+            for ($i = 0; $i < $suspended; $i++) {
+                $plugin->enrol_user($instance, $generator->create_user()->id, null, 0, 0, ENROL_USER_SUSPENDED);
+            }
+        }
+        $_GET['tsort'] = 'dbsuspended';
+        $_GET['tdir'] = SORT_DESC;
+
+        $table = new courses_table([], new \moodle_url('/local/rvc_enrolment_management/index.php'));
+        $table->setup();
+        $table->query_db(50, false);
+        $order = array_column(array_values($table->rawdata), 'id');
+        unset($_GET['tsort'], $_GET['tdir']);
+
+        $this->assertEquals([$this->courses['msc']->id, $this->courses['loc']->id], array_slice($order, 0, 2));
+    }
 }

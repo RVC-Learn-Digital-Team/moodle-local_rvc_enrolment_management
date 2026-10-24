@@ -21,9 +21,9 @@ defined('MOODLE_INTERNAL') || die();
 require_once($CFG->libdir . '/formslib.php');
 
 /**
- * Confirms re-activating or deleting enrolments this tool suspended.
+ * Confirms re-activating or deleting suspended enrolments. Deletions take an optional reason.
  *
- * Custom data: action (string), ids (int[] eligible suspension record ids), label (button text).
+ * Custom data: action (string), ids (int[] eligible ids), label (button text).
  *
  * @package   local_rvc_enrolment_management
  * @copyright 2026 The Royal Veterinary College
@@ -35,10 +35,16 @@ class tool_action_form extends \moodleform {
      */
     protected function definition() {
         $mform = $this->_form;
+        $component = 'local_rvc_enrolment_management';
         $mform->addElement('hidden', 'action', $this->_customdata['action']);
         $mform->setType('action', PARAM_ALPHA);
         $mform->addElement('hidden', 'idlist', implode(',', $this->_customdata['ids']));
         $mform->setType('idlist', PARAM_SEQUENCE);
+        if ($this->_customdata['action'] !== 'reactivate') {
+            $mform->addElement('textarea', 'reason', get_string('deletereason', $component), ['rows' => 3, 'cols' => 60]);
+            $mform->setType('reason', PARAM_TEXT);
+            $mform->addHelpButton('reason', 'deletereason', $component);
+        }
         $this->add_action_buttons(true, $this->_customdata['label']);
     }
 }

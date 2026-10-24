@@ -105,28 +105,35 @@ contain one. Host, user and password never appear.
 
 ### Delete
 
-- Manual only: an admin ticks and confirms. There is no scheduled task.
+- Manual only: an admin ticks and confirms. There is no scheduled task. An optional
+  reason is stored with each deletion.
+- Applies to enrolments this tool suspended and, since 2026-10-24, to database-family
+  enrolments suspended by anything else (for example the Extended plugin's own sync).
 - Allowed only when all of these hold:
-  - the suspension was made by this tool at least the configured number of days ago
-    (default 3);
+  - the waiting period has passed (default 3 days). For this tool's suspensions it runs
+    from the recorded suspension. For other suspensions there is no suspension date, so
+    it runs from the enrolment's last change (`user_enrolments.timemodified`); a last
+    change in the future, or older than the waiting period, does not hold deletion back;
   - the enrolment is still suspended;
   - the feed can be read and still doesn't list the person.
 - Done through `enrol_plugin::unenrol_user()`. The confirm page states the effect: this
   enrolment and the roles and groups it created are removed. If it's the person's last
   enrolment in the course, Moodle also removes all their roles, group memberships, grades
   and last-access record there.
-- Enrolments suspended by anything else are **shown for information only**. The tool
-  can't re-activate or delete them.
+- Enrolments suspended by anything else can be deleted, but not re-activated, by this
+  tool. (Until 2026-10-24 they were shown for information only.)
 
 ### Record
 
 There is one table, `local_rvc_enrolment_management_suspension`, with one row per
-suspension:
+suspension made by this tool, and one per deletion of an enrolment suspended elsewhere
+(no suspending administrator, and the enrolment's last change as the suspension date):
 
 - course, user, user enrolment ID, enrol instance ID, method;
 - when suspended and by whom, and the optional reason;
 - whether the course was in the feed at that moment;
-- when re-activated and by whom; when deleted and by whom.
+- when re-activated and by whom; when deleted, by whom and the optional reason
+  (`deletereason`, added in version 2026102400 by the plugin's first upgrade step).
 
 A Privacy API provider (metadata, export, delete, userlist) covers it.
 
@@ -177,7 +184,8 @@ browser's Back button works). Every filled-in filter must match:
 4. **Still in the feed: can't be suspended.** No tick boxes; the reason is shown.
 5. **Suspended by this tool:** date, by whom, reason, and days elapsed. Re-activate
    and, once the delay has passed, delete.
-6. **Already suspended by something else:** information only.
+6. **Already suspended by something else:** its own tick list, with the last change,
+   "Can be deleted from", and a Delete selected button. No re-activate.
 
 **Confirm suspension** (Moodle form):
 
@@ -222,6 +230,8 @@ its effect.
       tool-suspension list has no actions yet; re-activate and delete come in M5.
 - [x] **M5 Re-activate and delete:** both confirm flows and the deletion delay. Built
       2026-10-23 (v0.4.0) with 5 more PHPUnit tests.
+- [x] **M5a Delete enrolments suspended elsewhere,** with an optional reason for every
+      deletion (Brian, 2026-10-24). Built as v0.5.0 (version 2026102400).
 - [ ] **M6 learn-uat validation** against `Moodle_Snapshot_UAT` and the extended feed.
       Checklist below.
 - [ ] **Playground rerun:** once Brian has installed the plugin through
@@ -235,7 +245,7 @@ No code is expected for M6. Stop at the first failure and report which step it w
 **Before testing (Brian and the hosting partner)**
 
 1. learn-uat's core `enrol_database` points at `Moodle_Snapshot_UAT`, and its sync runs.
-2. The plugin is deployed to learn-uat at version 2026102303 or later, and the upgrade
+2. The plugin is deployed to learn-uat at version 2026102400 or later, and the upgrade
    has run.
 3. Agree a test course and one or two test people whose enrolments can be suspended and
    deleted. Set "Days before deletion" to 0 for the test, then back to 3 afterwards.
@@ -274,7 +284,13 @@ No code is expected for M6. Stop at the first failure and report which step it w
    - The confirm page shows the consequences, and flags "last enrolment in this course"
      where it applies.
    - Afterwards, the course's Participants page no longer lists that enrolment.
-4. **Batch warning:**
+4. **Delete an enrolment suspended elsewhere:**
+   - In an Extended course, choose a person under "Already suspended by something else"
+     who the SRS tool suspended and who is not in its feed.
+   - "Can be deleted from" reads "Now" unless their enrolment changed in the last 3 days.
+   - Delete them with a reason. Afterwards, the course's Participants page no longer
+     lists that enrolment.
+5. **Batch warning:**
    - In a small course, tick more than half the people under "Not in the feed" and
      choose Suspend selected.
    - The warning appears, and Confirm needs the "I understand" tick. Cancel without

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/rvc_enrolment_management/db" VERSION="20261022" COMMENT="XMLDB file for Moodle local/rvc_enrolment_management"
+<XMLDB PATH="local/rvc_enrolment_management/db" VERSION="20261024" COMMENT="XMLDB file for Moodle local/rvc_enrolment_management"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
   <TABLES>
-    <TABLE NAME="local_rvc_enrolment_management_suspension" COMMENT="One row per enrolment suspension made by this plugin, with its later re-activation or deletion">
+    <TABLE NAME="local_rvc_enrolment_management_suspension" COMMENT="One row per suspension made by this plugin, and per deletion of an enrolment suspended elsewhere (suspendedby 0, timesuspended from the enrolment&apos;s last change)">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
@@ -20,6 +20,7 @@
         <FIELD NAME="reactivatedby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timedeleted" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="deletedby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="deletereason" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Optional reason given for the deletion"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>

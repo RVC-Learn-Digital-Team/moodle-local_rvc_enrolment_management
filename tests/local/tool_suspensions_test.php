@@ -21,7 +21,7 @@ defined('MOODLE_INTERNAL') || die();
 require_once(__DIR__ . '/feed_testcase.php');
 
 /**
- * Re-activating and deleting enrolments this tool suspended.
+ * Re-activating and deleting suspended enrolments.
  *
  * @package   local_rvc_enrolment_management
  * @copyright 2026 The Royal Veterinary College
@@ -36,13 +36,15 @@ final class tool_suspensions_test extends feed_testcase {
     protected $users;
 
     /**
-     * Creates course C1 where bob and carol, not in the feed, are suspended by this tool.
+     * Creates course C1: bob and carol suspended by this tool, dave suspended by something else.
+     * None of them is in the feed.
      */
     protected function setUp(): void {
+        global $DB;
         parent::setUp();
         $generator = $this->getDataGenerator();
         $this->course = $generator->create_course(['idnumber' => 'C1']);
-        foreach (['bob', 'carol'] as $name) {
+        foreach (['bob', 'carol', 'dave'] as $name) {
             $this->users[$name] = $generator->create_user(['username' => "$name@example.com"]);
             $this->enrol_by_database($this->course, $this->users[$name]);
         }
@@ -50,6 +52,8 @@ final class tool_suspensions_test extends feed_testcase {
         $this->setAdminUser();
         set_config('deletiondelaydays', 0, 'local_rvc_enrolment_management');
         suspender::suspend($this->course, [$this->ueid('bob'), $this->ueid('carol')], '');
+        $instance = $DB->get_record('enrol', ['courseid' => $this->course->id, 'enrol' => 'database']);
+        $this->plugin->update_user_enrol($instance, $this->users['dave']->id, ENROL_USER_SUSPENDED);
     }
 
     /**
@@ -94,7 +98,7 @@ final class tool_suspensions_test extends feed_testcase {
     }
 
     /**
-     * Deletion removes the enrolment, stamps the record and flags a last enrolment.
+     * Deletion removes the enrolment, stamps the record with the reason and flags a last enrolment.
      */
     public function test_delete(): void {
         global $DB;
@@ -102,11 +106,13 @@ final class tool_suspensions_test extends feed_testcase {
         $check = tool_suspensions::check(tool_suspensions::DELETE, $this->course, [$this->recordid('carol')]);
         $this->assertTrue($check['eligible'][$this->recordid('carol')]->lastenrolment);
 
-        $result = tool_suspensions::delete($this->course, [$this->recordid('carol')]);
+        $result = tool_suspensions::delete(tool_suspensions::DELETE, $this->course, [$this->recordid('carol')], 'Withdrawn');
 
         $this->assertCount(1, $result['done']);
         $this->assertFalse($DB->record_exists('user_enrolments', ['id' => $ueid]));
-        $this->assertNotEmpty($DB->get_field(course_data::TABLE, 'timedeleted', ['id' => $this->recordid('carol')]));
+        $record = $DB->get_record(course_data::TABLE, ['id' => $this->recordid('carol')]);
+        $this->assertNotEmpty($record->timedeleted);
+        $this->assertSame('Withdrawn', $record->deletereason);
         $this->assertArrayNotHasKey($ueid, course_data::suspended($this->course->id, 'database')['tool']);
     }
 
@@ -115,7 +121,7 @@ final class tool_suspensions_test extends feed_testcase {
      */
     public function test_delete_waits_for_the_delay(): void {
         set_config('deletiondelaydays', 3, 'local_rvc_enrolment_management');
-        $result = tool_suspensions::delete($this->course, [$this->recordid('bob')]);
+        $result = tool_suspensions::delete(tool_suspensions::DELETE, $this->course, [$this->recordid('bob')], '');
 
         $this->assertSame([$this->recordid('bob') => tool_suspensions::SKIP_TOOEARLY], $result['skipped']);
     }
@@ -125,11 +131,11 @@ final class tool_suspensions_test extends feed_testcase {
      */
     public function test_delete_rechecks_the_feed(): void {
         $this->feed('C1', 'BOB@example.com ');
-        $listed = tool_suspensions::delete($this->course, [$this->recordid('bob')]);
+        $listed = tool_suspensions::delete(tool_suspensions::DELETE, $this->course, [$this->recordid('bob')], '');
         $this->assertSame([$this->recordid('bob') => tool_suspensions::SKIP_LISTED], $listed['skipped']);
 
         set_config('remoteenroltable', 'rvcem_no_such_table', 'enrol_database');
-        $unavailable = tool_suspensions::delete($this->course, [$this->recordid('carol')]);
+        $unavailable = tool_suspensions::delete(tool_suspensions::DELETE, $this->course, [$this->recordid('carol')], '');
         $this->assertSame([$this->recordid('carol') => tool_suspensions::SKIP_FEEDUNAVAILABLE], $unavailable['skipped']);
     }
 
@@ -142,10 +148,58 @@ final class tool_suspensions_test extends feed_testcase {
         $this->plugin->update_user_enrol($instance, $this->users['bob']->id, ENROL_USER_ACTIVE);
         $other = $this->getDataGenerator()->create_course(['idnumber' => 'C2']);
 
-        $result = tool_suspensions::delete($this->course, [$this->recordid('bob')]);
+        $result = tool_suspensions::delete(tool_suspensions::DELETE, $this->course, [$this->recordid('bob')], '');
         $elsewhere = tool_suspensions::reactivate($other, [$this->recordid('carol')]);
 
         $this->assertSame([$this->recordid('bob') => tool_suspensions::SKIP_NOTSUSPENDED], $result['skipped']);
         $this->assertSame([$this->recordid('carol') => tool_suspensions::SKIP_NOTFOUND], $elsewhere['skipped']);
+    }
+
+    /**
+     * An enrolment suspended elsewhere can be deleted, and the deletion is recorded.
+     */
+    public function test_delete_suspended_elsewhere(): void {
+        global $DB, $USER;
+        $ueid = $this->ueid('dave');
+        $changed = (int) $DB->get_field('user_enrolments', 'timemodified', ['id' => $ueid]);
+
+        $result = tool_suspensions::delete(tool_suspensions::DELETE_ELSEWHERE, $this->course, [$ueid], 'Left SRS');
+
+        $this->assertSame([$ueid], array_keys($result['done']));
+        $this->assertFalse($DB->record_exists('user_enrolments', ['id' => $ueid]));
+        $record = $DB->get_record(course_data::TABLE, ['userenrolmentid' => $ueid], '*', MUST_EXIST);
+        $this->assertEquals(0, $record->suspendedby);
+        $this->assertEquals($changed, $record->timesuspended);
+        $this->assertEquals($USER->id, $record->deletedby);
+        $this->assertSame('Left SRS', $record->deletereason);
+    }
+
+    /**
+     * For enrolments suspended elsewhere, a recent last change holds deletion back; an old one,
+     * or one in the future, does not.
+     */
+    public function test_elsewhere_delay_uses_the_last_change(): void {
+        global $DB;
+        set_config('deletiondelaydays', 3, 'local_rvc_enrolment_management');
+        $ueid = $this->ueid('dave');
+        $check = fn() => tool_suspensions::check(tool_suspensions::DELETE_ELSEWHERE, $this->course, [$ueid]);
+
+        $DB->set_field('user_enrolments', 'timemodified', time() - DAYSECS, ['id' => $ueid]);
+        $this->assertSame([$ueid => tool_suspensions::SKIP_TOOEARLY], $check()['skipped']);
+
+        $DB->set_field('user_enrolments', 'timemodified', time() - 4 * DAYSECS, ['id' => $ueid]);
+        $this->assertArrayHasKey($ueid, $check()['eligible']);
+
+        $DB->set_field('user_enrolments', 'timemodified', time() + DAYSECS, ['id' => $ueid]);
+        $this->assertArrayHasKey($ueid, $check()['eligible']);
+    }
+
+    /**
+     * This tool's suspensions are not deleted through the "suspended elsewhere" route.
+     */
+    public function test_elsewhere_route_skips_tool_suspensions(): void {
+        $result = tool_suspensions::check(tool_suspensions::DELETE_ELSEWHERE, $this->course, [$this->ueid('bob')]);
+
+        $this->assertSame([$this->ueid('bob') => tool_suspensions::SKIP_NOTFOUND], $result['skipped']);
     }
 }

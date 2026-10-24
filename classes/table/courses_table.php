@@ -28,6 +28,9 @@ use local_rvc_enrolment_management\local\course_filter;
  * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class courses_table extends \core_table\sql_table {
+    /** @var string[] Columns that sort by suspended count, most suspended first. */
+    const SUSPENDEDCOLUMNS = ['dbsuspended', 'extsuspended'];
+
     /** @var string[] Category paths by category id. */
     protected $categories;
 
@@ -42,7 +45,16 @@ class courses_table extends \core_table\sql_table {
         $component = 'local_rvc_enrolment_management';
         $this->categories = \core_course_category::make_categories_list();
 
-        $this->define_columns(['id', 'idnumber', 'shortname', 'fullname', 'category', 'visible', 'database', 'extended']);
+        $this->define_columns([
+            'id',
+            'idnumber',
+            'shortname',
+            'coursefullname',
+            'category',
+            'visible',
+            'dbsuspended',
+            'extsuspended',
+        ]);
         $this->define_headers([
             get_string('courseid', $component),
             get_string('idnumber'),
@@ -54,10 +66,8 @@ class courses_table extends \core_table\sql_table {
             get_string('method_databaseextendedv2', $component),
         ]);
         $this->define_baseurl($baseurl);
-        $this->sortable(true, 'fullname', SORT_ASC);
-        foreach (['category', 'database', 'extended'] as $column) {
-            $this->no_sorting($column);
-        }
+        $this->sortable(true, 'coursefullname', SORT_ASC);
+        $this->no_sorting('category');
 
         [$where, $params] = course_filter::sql($filters);
         $active = ENROL_USER_ACTIVE;
@@ -73,8 +83,9 @@ class courses_table extends \core_table\sql_table {
                     WHERE e.enrol IN ('database', 'databaseextendedv2')
                  GROUP BY e.courseid";
         $this->set_sql(
-            'c.id, c.idnumber, c.shortname, c.fullname, c.category, c.visible,
-             n.dbinstances, n.dbactive, n.dbsuspended, n.extinstances, n.extactive, n.extsuspended',
+            'c.id, c.idnumber, c.shortname, c.fullname AS coursefullname, c.category, c.visible,
+             n.dbinstances, n.dbactive, COALESCE(n.dbsuspended, 0) AS dbsuspended,
+             n.extinstances, n.extactive, COALESCE(n.extsuspended, 0) AS extsuspended',
             "{course} c
              JOIN {course_categories} cc ON cc.id = c.category
              LEFT JOIN ($counts) n ON n.courseid = c.id",
@@ -84,14 +95,15 @@ class courses_table extends \core_table\sql_table {
     }
 
     /**
-     * Full name, linking to the course's suspension page.
+     * Course full name, linking to the course page. The column is not called "fullname"
+     * because Moodle tables treat that name as a person's first and last name.
      *
      * @param \stdClass $row
      * @return string
      */
-    public function col_fullname($row) {
+    public function col_coursefullname($row) {
         $url = new \moodle_url('/local/rvc_enrolment_management/course.php', ['id' => $row->id]);
-        return \html_writer::link($url, format_string($row->fullname));
+        return \html_writer::link($url, format_string($row->coursefullname));
     }
 
     /**
@@ -130,7 +142,7 @@ class courses_table extends \core_table\sql_table {
      * @param \stdClass $row
      * @return string
      */
-    public function col_database($row) {
+    public function col_dbsuspended($row) {
         return $this->counts($row->dbinstances, $row->dbactive, $row->dbsuspended);
     }
 
@@ -140,8 +152,30 @@ class courses_table extends \core_table\sql_table {
      * @param \stdClass $row
      * @return string
      */
-    public function col_extended($row) {
+    public function col_extsuspended($row) {
         return $this->counts($row->extinstances, $row->extactive, $row->extsuspended);
+    }
+
+    /**
+     * Sort link for a header. The suspended-count columns sort most suspended first when chosen,
+     * and the other way round when clicked again.
+     *
+     * @param string $text header text
+     * @param string $column column name
+     * @param bool $isprimary whether this column is the current primary sort column
+     * @param int $order SORT_ASC or SORT_DESC
+     * @return string HTML fragment
+     */
+    protected function sort_link($text, $column, $isprimary, $order) {
+        if ($isprimary || !in_array($column, self::SUSPENDEDCOLUMNS, true)) {
+            return parent::sort_link($text, $column, $isprimary, $order);
+        }
+        $params = [$this->request[TABLE_VAR_SORT] => $column, $this->request[TABLE_VAR_DIR] => SORT_DESC];
+        return \html_writer::link(
+            $this->baseurl->out(false, $params),
+            $text . get_accesshide(get_string('sortby') . ' ' . $text),
+            ['data-sortable' => 1, 'data-sortby' => $column, 'data-sortorder' => SORT_DESC, 'role' => 'button']
+        );
     }
 
     /**

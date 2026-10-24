@@ -25,6 +25,7 @@
 use local_rvc_enrolment_management\local\course_data;
 use local_rvc_enrolment_management\local\course_review;
 use local_rvc_enrolment_management\local\feed_reader;
+use local_rvc_enrolment_management\local\tool_suspensions;
 
 require(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
@@ -218,17 +219,43 @@ if ($listed->data) {
     echo html_writer::table($listed);
 }
 
-// 5. Suspended by this tool (re-activate or delete), and 6. suspended by something else (information only).
-$delay = (int) get_config($component, 'deletiondelaydays');
-$tool = new html_table();
-$toolmaster = new \core\output\checkbox_toggleall('rvcem-tool', true, [
-    'id' => 'rvcem-tool-selectall',
-    'name' => 'toolselectall',
+// 5. Suspended by this tool (re-activate or delete), and 6. suspended by something else (delete).
+$actionurl = new moodle_url('/local/rvc_enrolment_management/action.php', ['courseid' => $course->id]);
+$deletable = function (int $suspended) use ($date): string {
+    $from = tool_suspensions::deletable_from($suspended);
+    return $from ? $date($from) : get_string('now');
+};
+$tickbox = fn(string $group, int $value, stdClass $row) => $OUTPUT->render(new \core\output\checkbox_toggleall($group, false, [
+    'id' => $group . $value,
+    'name' => 'ids[]',
+    'value' => $value,
+    'label' => fullname($row),
+    'labelclasses' => 'visually-hidden',
+]));
+$selectall = fn(string $group) => $OUTPUT->render(new \core\output\checkbox_toggleall($group, true, [
+    'id' => $group . '-selectall',
+    'name' => $group . '-selectall',
     'label' => get_string('selectall'),
     'labelclasses' => 'visually-hidden',
-]);
+]));
+$actionform = function (html_table $table, array $buttons) use ($actionurl): string {
+    $html = html_writer::start_tag('form', ['method' => 'post', 'action' => $actionurl->out(false)]);
+    $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+    $html .= html_writer::table($table);
+    foreach ($buttons as $action => $class) {
+        $html .= html_writer::tag('button', get_string($action . 'selected', 'local_rvc_enrolment_management'), [
+            'type' => 'submit',
+            'name' => 'action',
+            'value' => $action,
+            'class' => "btn $class me-2",
+        ]);
+    }
+    return $html . html_writer::end_tag('form');
+};
+
+$tool = new html_table();
 $tool->head = [
-    $OUTPUT->render($toolmaster),
+    $selectall('rvcem-tool'),
     get_string('name'),
     get_string('method', $component),
     get_string('suspendedon', $component),
@@ -238,7 +265,13 @@ $tool->head = [
 ];
 $tool->data = [];
 $elsewhere = new html_table();
-$elsewhere->head = [get_string('name'), get_string('method', $component), get_string('lastmodified')];
+$elsewhere->head = [
+    $selectall('rvcem-elsewhere'),
+    get_string('name'),
+    get_string('method', $component),
+    get_string('lastchanged', $component),
+    get_string('deletablefrom', $component),
+];
 $elsewhere->data = [];
 foreach ($methods as $method) {
     if ($methodfilter !== '' && $methodfilter !== $method) {
@@ -247,47 +280,34 @@ foreach ($methods as $method) {
     $suspended = course_data::suspended($course->id, $method);
     foreach ($suspended['tool'] as $row) {
         $admin = fullname(username_load_fields_from_object(new stdClass(), $row, 'admin'));
-        $deletable = (int) $row->timesuspended + $delay * DAYSECS;
-        $tick = new \core\output\checkbox_toggleall('rvcem-tool', false, [
-            'id' => 'rvcem-tool' . $row->suspensionid,
-            'name' => 'suspensionids[]',
-            'value' => $row->suspensionid,
-            'label' => fullname($row),
-            'labelclasses' => 'visually-hidden',
-        ]);
         $tool->data[] = [
-            $OUTPUT->render($tick),
+            $tickbox('rvcem-tool', (int) $row->suspensionid, $row),
             $person($row),
             $methodname($method),
             $date((int) $row->timesuspended),
             s($admin),
             s((string) $row->reason),
-            $deletable <= time() ? get_string('now') : $date($deletable),
+            $deletable((int) $row->timesuspended),
         ];
     }
-    foreach ($suspended['elsewhere'] as $row) {
-        $elsewhere->data[] = [$person($row), $methodname($method), $date((int) $row->timemodified)];
+    foreach ($suspended['elsewhere'] as $ueid => $row) {
+        $elsewhere->data[] = [
+            $tickbox('rvcem-elsewhere', (int) $ueid, $row),
+            $person($row),
+            $methodname($method),
+            $date((int) $row->timemodified),
+            $deletable((int) $row->timemodified),
+        ];
     }
 }
 echo $OUTPUT->heading(get_string('toolheading', $component, count($tool->data)), 3);
 if ($tool->data) {
-    $actionurl = new moodle_url('/local/rvc_enrolment_management/action.php', ['courseid' => $course->id]);
-    echo html_writer::start_tag('form', ['method' => 'post', 'action' => $actionurl->out(false)]);
-    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-    echo html_writer::table($tool);
-    foreach (['reactivate' => 'btn-secondary', 'delete' => 'btn-danger'] as $action => $class) {
-        echo html_writer::tag('button', get_string($action . 'selected', $component), [
-            'type' => 'submit',
-            'name' => 'action',
-            'value' => $action,
-            'class' => "btn $class me-2",
-        ]);
-    }
-    echo html_writer::end_tag('form');
+    echo $actionform($tool, ['reactivate' => 'btn-secondary', 'delete' => 'btn-danger']);
 }
 echo $OUTPUT->heading(get_string('elsewhereheading', $component, count($elsewhere->data)), 3);
 if ($elsewhere->data) {
-    echo html_writer::table($elsewhere);
+    echo html_writer::tag('p', get_string('elsewhereintro', $component));
+    echo $actionform($elsewhere, ['deleteelsewhere' => 'btn-danger']);
 }
 
 echo $OUTPUT->footer();

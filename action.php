@@ -15,7 +15,10 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Confirm and carry out re-activation or deletion of enrolments this tool suspended.
+ * Confirm and carry out re-activation or deletion of suspended enrolments.
+ *
+ * Actions: reactivate and delete take this tool's suspension record ids; deleteelsewhere
+ * takes the user enrolment ids of enrolments suspended by something else.
  *
  * @package   local_rvc_enrolment_management
  * @copyright 2026 The Royal Veterinary College
@@ -42,13 +45,15 @@ $component = 'local_rvc_enrolment_management';
 $course = get_course($courseid);
 $courseurl = new moodle_url('/local/rvc_enrolment_management/course.php', ['id' => $course->id]);
 $action = required_param('action', PARAM_ALPHA);
-if (!in_array($action, [tool_suspensions::REACTIVATE, tool_suspensions::DELETE], true)) {
+$actions = [tool_suspensions::REACTIVATE, tool_suspensions::DELETE, tool_suspensions::DELETE_ELSEWHERE];
+if (!in_array($action, $actions, true)) {
     throw new moodle_exception('invalidparameter', 'debug');
 }
+$deleting = $action !== tool_suspensions::REACTIVATE;
 $methodname = fn(string $method) => get_string('method_' . $method, $component);
 
-// The selection arrives from the course page as suspensionids[], or back from this form as idlist.
-$ids = optional_param_array('suspensionids', [], PARAM_INT);
+// The selection arrives from the course page as ids[], or back from this form as idlist.
+$ids = optional_param_array('ids', [], PARAM_INT);
 if (!$ids && ($list = optional_param('idlist', '', PARAM_SEQUENCE)) !== '') {
     $ids = explode(',', $list);
 }
@@ -62,42 +67,46 @@ $form = new tool_action_form(
     [
         'action' => $action,
         'ids' => array_keys($check['eligible']),
-        'label' => get_string($action . 'count', $component, count($check['eligible'])),
+        'label' => get_string(($deleting ? 'delete' : 'reactivate') . 'count', $component, count($check['eligible'])),
     ]
 );
 if ($form->is_cancelled()) {
     redirect($courseurl);
 }
 
-$names = function (array $rows) use ($methodname, $component, $action): array {
+$names = function (array $rows) use ($methodname, $component, $deleting): array {
     $lines = [];
     foreach ($rows as $row) {
         $line = fullname($row) . ' (' . $methodname($row->enrol) . ')';
-        if ($action === tool_suspensions::DELETE && !empty($row->lastenrolment)) {
+        if ($deleting && !empty($row->lastenrolment)) {
             $line .= ' - ' . get_string('lastenrolment', $component);
         }
         $lines[] = s($line);
     }
     return $lines;
 };
-$skipnames = function (array $skipped) use ($DB, $component): array {
+$skipnames = function (array $skipped) use ($DB, $component, $action): array {
     $lines = [];
     foreach ($skipped as $id => $reason) {
-        $sql = 'SELECT u.* FROM {user} u JOIN {local_rvc_enrolment_management_suspension} s ON s.userid = u.id WHERE s.id = ?';
+        $sql = $action === tool_suspensions::DELETE_ELSEWHERE
+            ? 'SELECT u.* FROM {user} u JOIN {user_enrolments} ue ON ue.userid = u.id WHERE ue.id = ?'
+            : 'SELECT u.* FROM {user} u JOIN {local_rvc_enrolment_management_suspension} s ON s.userid = u.id WHERE s.id = ?';
         $user = $DB->get_record_sql($sql, [$id]);
         $who = $user ? fullname($user) : get_string('unknownenrolment', $component, $id);
         $lines[] = s(get_string('toolskipped_' . $reason, $component, $who));
     }
     return $lines;
 };
+$resultname = $deleting ? 'delete' : 'reactivate';
 
 if ($data = $form->get_data()) {
-    $result = $action === tool_suspensions::DELETE
-        ? tool_suspensions::delete($course, explode(',', $data->idlist))
-        : tool_suspensions::reactivate($course, explode(',', $data->idlist));
+    $selected = explode(',', $data->idlist);
+    $result = $deleting
+        ? tool_suspensions::delete($action, $course, $selected, trim((string) ($data->reason ?? '')))
+        : tool_suspensions::reactivate($course, $selected);
     echo $OUTPUT->header();
-    echo $OUTPUT->heading(get_string($action . 'results', $component));
-    echo $OUTPUT->notification(get_string($action . 'done', $component, count($result['done'])), 'success', false);
+    echo $OUTPUT->heading(get_string($resultname . 'results', $component));
+    echo $OUTPUT->notification(get_string($resultname . 'done', $component, count($result['done'])), 'success', false);
     if ($result['done']) {
         echo html_writer::alist($names($result['done']));
     }
@@ -111,11 +120,11 @@ if ($data = $form->get_data()) {
 }
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(get_string('confirm' . $action, $component));
+echo $OUTPUT->heading(get_string('confirm' . $resultname, $component));
 echo html_writer::tag('p', s(format_string($course->fullname)));
 if ($check['eligible']) {
     echo html_writer::alist($names($check['eligible']));
-    if ($action === tool_suspensions::DELETE) {
+    if ($deleting) {
         echo $OUTPUT->notification(get_string('deleteconsequences', $component), 'warning', false);
     } else if (in_array('databaseextendedv2', array_column($check['eligible'], 'enrol'), true)) {
         echo $OUTPUT->notification(get_string('reactivateextendednote', $component), 'info', false);

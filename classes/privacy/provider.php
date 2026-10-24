@@ -63,6 +63,7 @@ class provider implements
             'reactivatedby' => 'privacy:metadata:suspension:reactivatedby',
             'timedeleted' => 'privacy:metadata:suspension:timedeleted',
             'deletedby' => 'privacy:metadata:suspension:deletedby',
+            'deletereason' => 'privacy:metadata:suspension:deletereason',
         ], 'privacy:metadata:suspension');
         return $collection;
     }
@@ -132,6 +133,7 @@ class provider implements
                     'reactivatedbyyou' => transform::yesno($record->reactivatedby == $userid),
                     'timedeleted' => $record->timedeleted ? transform::datetime($record->timedeleted) : null,
                     'deletedbyyou' => transform::yesno($record->deletedby == $userid),
+                    'deletereason' => $record->deletereason,
                 ];
             }
             writer::with_context($context)->export_data(
