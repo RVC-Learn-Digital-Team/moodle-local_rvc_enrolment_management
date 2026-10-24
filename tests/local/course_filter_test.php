@@ -210,4 +210,23 @@ final class course_filter_test extends \advanced_testcase {
 
         $this->assertEquals([$this->courses['msc']->id, $this->courses['loc']->id], array_slice($order, 0, 2));
     }
+
+    /**
+     * Sorting by category follows Moodle's category order, and reverses on request.
+     */
+    public function test_table_sorts_by_category(): void {
+        $order = function (int $direction): array {
+            $_GET['tsort'] = 'categorysortorder';
+            $_GET['tdir'] = $direction;
+            $table = new courses_table([], new \moodle_url('/local/rvc_enrolment_management/index.php'));
+            $table->setup();
+            $table->query_db(50, false);
+            unset($_GET['tsort'], $_GET['tdir']);
+            return array_column(array_values($table->rawdata), 'id');
+        };
+
+        $ascending = $order(SORT_ASC);
+        $this->assertEquals($this->courses['msc']->id, end($ascending));
+        $this->assertEquals($this->courses['msc']->id, $order(SORT_DESC)[0]);
+    }
 }

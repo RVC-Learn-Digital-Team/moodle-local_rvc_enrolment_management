@@ -50,7 +50,7 @@ class courses_table extends \core_table\sql_table {
             'idnumber',
             'shortname',
             'coursefullname',
-            'category',
+            'categorysortorder',
             'visible',
             'dbsuspended',
             'extsuspended',
@@ -67,7 +67,6 @@ class courses_table extends \core_table\sql_table {
         ]);
         $this->define_baseurl($baseurl);
         $this->sortable(true, 'coursefullname', SORT_ASC);
-        $this->no_sorting('category');
 
         [$where, $params] = course_filter::sql($filters);
         $active = ENROL_USER_ACTIVE;
@@ -83,7 +82,7 @@ class courses_table extends \core_table\sql_table {
                     WHERE e.enrol IN ('database', 'databaseextendedv2')
                  GROUP BY e.courseid";
         $this->set_sql(
-            'c.id, c.idnumber, c.shortname, c.fullname AS coursefullname, c.category, c.visible,
+            'c.id, c.idnumber, c.shortname, c.fullname AS coursefullname, c.category, cc.sortorder AS categorysortorder, c.visible,
              n.dbinstances, n.dbactive, COALESCE(n.dbsuspended, 0) AS dbsuspended,
              n.extinstances, n.extactive, COALESCE(n.extsuspended, 0) AS extsuspended',
             "{course} c
@@ -117,12 +116,12 @@ class courses_table extends \core_table\sql_table {
     }
 
     /**
-     * Category path.
+     * Category path. Sorting this column follows Moodle's own category order.
      *
      * @param \stdClass $row
      * @return string
      */
-    public function col_category($row) {
+    public function col_categorysortorder($row) {
         return s($this->categories[$row->category] ?? '');
     }
 
