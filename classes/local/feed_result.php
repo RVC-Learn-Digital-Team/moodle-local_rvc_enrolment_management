@@ -33,6 +33,12 @@ class feed_result {
     /** @var array Normalised person keys the feed lists for the course, as keys. */
     public $listed;
 
+    /** @var string Why the feed could not be read: settings, connect, query or error; empty when read. */
+    public $reason = '';
+
+    /** @var string For reason "error", the exception class only; never a message or connection detail. */
+    public $errorclass = '';
+
     /**
      * Constructor.
      *
@@ -49,10 +55,15 @@ class feed_result {
     /**
      * Result for a feed that could not be read.
      *
+     * @param string $reason settings, connect, query or error
+     * @param string $errorclass for reason "error", the exception class
      * @return self
      */
-    public static function unavailable(): self {
-        return new self(false);
+    public static function unavailable(string $reason = 'settings', string $errorclass = ''): self {
+        $result = new self(false);
+        $result->reason = $reason;
+        $result->errorclass = $errorclass;
+        return $result;
     }
 
     /**

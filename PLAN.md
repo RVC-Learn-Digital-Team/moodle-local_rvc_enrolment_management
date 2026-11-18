@@ -260,6 +260,15 @@ its effect.
         suspending first, without the waiting period and without a feed check. Active ones
         are deleted from "Not in the feed" with "Delete selected deleted accounts";
         suspended ones from their usual list, where "Can be deleted from" reads "Now".
+- [x] **M5d Feed troubleshooting and core change** (2026-11-18), v0.6.3 (version 2026111802):
+      - When a feed can't be read, its card now says which stage failed: settings,
+        connecting, reading the table, or an unexpected error with its exception class.
+        No message text or connection details are shown.
+      - The playground's core moved to Moodle 4.5.16+ (Build 20261117), where
+        `enrol_database` builds feed queries with bound parameters (`db_get_query`,
+        MDL-90353) and deprecates `db_get_sql`. The plugin now uses `db_get_query` when the
+        enrol plugin has it, and falls back to `db_get_sql` (older cores, and probably the
+        extended plugin). Only the new path is tested on the playground's core.
 - [ ] **M6 learn-uat validation** against `Moodle_Snapshot_UAT` and the extended feed.
       Checklist below.
 - [ ] **Playground rerun:** once Brian has installed the plugin through

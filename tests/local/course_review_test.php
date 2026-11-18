@@ -146,6 +146,9 @@ final class course_review_test extends feed_testcase {
         $this->expectOutputString('');
         $this->assertSame($level, ob_get_level());
         $this->assertFalse($review->feed->available);
+        // A refused connection either returns nothing or raises a driver warning, which PHPUnit
+        // turns into an exception; both must leave the feed unavailable with a stated reason.
+        $this->assertContains($review->feed->reason, ['connect', 'error']);
         $this->assertCount(1, $review->active);
         $this->assertSame([], $review->notlisted);
         $this->assertSame([], $review->listed);
@@ -157,7 +160,9 @@ final class course_review_test extends feed_testcase {
     public function test_missing_feed_table_makes_feed_unavailable(): void {
         set_config('remoteenroltable', 'rvcem_no_such_table', 'enrol_database');
 
-        $this->assertFalse((new feed_reader('database'))->read_course('C1')->available);
+        $result = (new feed_reader('database'))->read_course('C1');
+        $this->assertFalse($result->available);
+        $this->assertSame('query', $result->reason);
     }
 
     /**
@@ -177,7 +182,10 @@ final class course_review_test extends feed_testcase {
             }
         };
 
-        $this->assertFalse($reader->read_course('C1')->available);
+        $result = $reader->read_course('C1');
+        $this->assertFalse($result->available);
+        $this->assertSame('error', $result->reason);
+        $this->assertSame('ReflectionException', $result->errorclass);
     }
 
     /**
@@ -188,7 +196,9 @@ final class course_review_test extends feed_testcase {
         $course = $generator->create_course(['idnumber' => 'C1']);
         set_config('localuserfield', 'firstname', 'enrol_database');
 
-        $this->assertFalse(course_review::review($course, 'database')->feed->available);
+        $feed = course_review::review($course, 'database')->feed;
+        $this->assertFalse($feed->available);
+        $this->assertSame('settings', $feed->reason);
     }
 
     /**

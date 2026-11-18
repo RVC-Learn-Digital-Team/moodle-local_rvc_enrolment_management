@@ -146,6 +146,8 @@ foreach ($methods as $method) {
             'error',
             false
         );
+        // Which stage failed, without any connection details.
+        $lines[] = get_string('feedreason_' . $review->feed->reason, $component, s($review->feed->errorclass));
     } else {
         $lines[] = get_string('feedconnected', $component);
         if ($course->idnumber === '') {

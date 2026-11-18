@@ -20,7 +20,7 @@ namespace local_rvc_enrolment_management\local;
  * Reads an enrol plugin's external feed through that plugin's own connection and query code.
  *
  * The enrol plugin's settings are read on every call, never copied. Its protected db_init()
- * and db_get_sql() are reached by reflection so that the transport (ODBC for core database,
+ * and query builder are reached by reflection so that the transport (ODBC for core database,
  * CoSector's own handling for the extended plugin) stays theirs to maintain. Anything the
  * driver prints, for example with the plugin's debugdb switched on, is discarded, and driver
  * errors are never passed on: a failure just makes the feed unavailable.
@@ -141,7 +141,7 @@ class feed_reader {
         try {
             $extdb = $this->call('db_init');
             if (!$extdb) {
-                return feed_result::unavailable();
+                return feed_result::unavailable('connect');
             }
             $rows = 0;
             $listed = [];
@@ -149,11 +149,10 @@ class feed_reader {
                 if ($rows > 0 || trim($key) === '') {
                     continue;
                 }
-                $sql = $this->call('db_get_sql', $table, [$coursefield => $key], [$userfield]);
-                $rs = $extdb->Execute($sql);
+                $rs = $this->query($extdb, $table, [$coursefield => $key], [$userfield]);
                 if (!$rs) {
                     $extdb->Close();
-                    return feed_result::unavailable();
+                    return feed_result::unavailable('query');
                 }
                 while ($fields = $rs->FetchRow()) {
                     $fields = array_change_key_case($fields, CASE_LOWER);
@@ -168,12 +167,31 @@ class feed_reader {
             $extdb->Close();
             return new feed_result(true, $rows, $listed);
         } catch (\Throwable $e) {
-            return feed_result::unavailable();
+            return feed_result::unavailable('error', get_class($e));
         } finally {
             while (ob_get_level() > $level) {
                 ob_end_clean();
             }
         }
+    }
+
+    /**
+     * Runs a SELECT on the feed through the enrol plugin's own query builder: the parameterised
+     * db_get_query() where the plugin has it (recent core builds, MDL-90353), otherwise
+     * the older db_get_sql() (earlier cores, and plugins copied from them).
+     *
+     * @param \ADOConnection $extdb feed connection
+     * @param string $table feed table
+     * @param array $conditions field => value
+     * @param string[] $fields fields to select
+     * @return \ADORecordSet|false
+     */
+    protected function query($extdb, string $table, array $conditions, array $fields) {
+        if (method_exists($this->plugin, 'db_get_query')) {
+            [$sql, $params] = $this->call('db_get_query', $extdb, $table, $conditions, $fields);
+            return $extdb->Execute($sql, $params);
+        }
+        return $extdb->Execute($this->call('db_get_sql', $table, $conditions, $fields));
     }
 
     /**
