@@ -40,6 +40,22 @@ class course_data {
     }
 
     /**
+     * People with any enrolment, active or suspended, by a managed method in the course.
+     *
+     * @param int $courseid
+     * @return int[] user ids
+     */
+    public static function users_with_methods(int $courseid): array {
+        global $DB;
+        [$insql, $params] = $DB->get_in_or_equal(feed_reader::METHODS, SQL_PARAMS_NAMED);
+        $sql = "SELECT DISTINCT ue.userid
+                  FROM {user_enrolments} ue
+                  JOIN {enrol} e ON e.id = ue.enrolid
+                 WHERE e.courseid = :courseid AND e.enrol $insql";
+        return array_map('intval', $DB->get_fieldset_sql($sql, $params + ['courseid' => $courseid]));
+    }
+
+    /**
      * Role names each person holds in the course, as text.
      *
      * @param \context_course $context
@@ -96,7 +112,8 @@ class course_data {
         global $DB;
         $userfields = \core_user\fields::for_name()->get_sql('u', false, '', '', false)->selects;
         $adminfields = \core_user\fields::for_name()->get_sql('a', false, 'admin', '', false)->selects;
-        $sql = "SELECT ue.id, ue.userid, ue.enrolid, ue.timemodified, u.username, $userfields,
+        $sql = "SELECT ue.id, ue.userid, ue.enrolid, ue.timemodified, u.username, u.email,
+                       u.suspended AS usersuspended, u.deleted AS userdeleted, $userfields,
                        s.id AS suspensionid, s.timesuspended, s.suspendedby, s.reason, $adminfields
                   FROM {user_enrolments} ue
                   JOIN {enrol} e ON e.id = ue.enrolid

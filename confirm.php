@@ -29,6 +29,7 @@ require(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 
 $courseid = required_param('courseid', PARAM_INT);
+$keepupload = array_filter(['upload' => optional_param('upload', '', PARAM_ALPHANUM)]);
 admin_externalpage_setup(
     'local_rvc_enrolment_management_manage',
     '',
@@ -40,7 +41,7 @@ require_sesskey();
 
 $component = 'local_rvc_enrolment_management';
 $course = get_course($courseid);
-$courseurl = new moodle_url('/local/rvc_enrolment_management/course.php', ['id' => $course->id]);
+$courseurl = new moodle_url('/local/rvc_enrolment_management/course.php', ['id' => $course->id] + $keepupload);
 $methodname = fn(string $method) => get_string('method_' . $method, $component);
 
 // The selection arrives from the course page as ueids[], or back from this form as uelist.
@@ -57,7 +58,7 @@ $warnings = [];
 foreach (suspender::warnings($check['counts']) as $method => $count) {
     $warnings[] = get_string('batchwarning', $component, $count + ['method' => $methodname($method)]);
 }
-$actionurl = new moodle_url('/local/rvc_enrolment_management/confirm.php', ['courseid' => $course->id]);
+$actionurl = new moodle_url('/local/rvc_enrolment_management/confirm.php', ['courseid' => $course->id] + $keepupload);
 $form = new confirm_form($actionurl, ['ueids' => array_keys($check['eligible']), 'warnings' => $warnings]);
 
 if ($form->is_cancelled()) {

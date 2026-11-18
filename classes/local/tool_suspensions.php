@@ -41,11 +41,20 @@ class tool_suspensions {
     /** @var string Action: delete an enrolment suspended by something else. */
     const DELETE_ELSEWHERE = 'deleteelsewhere';
 
+    /** @var string Action: delete an active enrolment whose Moodle account has been deleted. */
+    const DELETE_DELETED = 'deletedeleted';
+
     /** @var string Skip reason: not an enrolment that this action applies to in this course. */
     const SKIP_NOTFOUND = 'notfound';
 
     /** @var string Skip reason: the enrolment is no longer suspended. */
     const SKIP_NOTSUSPENDED = 'notsuspended';
+
+    /** @var string Skip reason: the enrolment is no longer active. */
+    const SKIP_NOTACTIVE = 'notactive';
+
+    /** @var string Skip reason: the person's Moodle account is not deleted. */
+    const SKIP_NOTDELETEDACCOUNT = 'notdeletedaccount';
 
     /** @var string Skip reason: the deletion delay has not passed. */
     const SKIP_TOOEARLY = 'tooearly';
@@ -72,7 +81,9 @@ class tool_suspensions {
      * Checks the selection for an action now.
      *
      * For REACTIVATE and DELETE the ids are this tool's suspension record ids; for
-     * DELETE_ELSEWHERE they are user enrolment ids. Eligible rows carry the person's name
+     * DELETE_ELSEWHERE and DELETE_DELETED they are user enrolment ids. DELETE_DELETED takes
+     * active enrolments of deleted accounts; the others take suspended enrolments. Enrolments
+     * of deleted accounts can be deleted straight away. Eligible rows carry the person's name
      * fields, ->enrol, ->enrolid, ->userid, ->userenrolmentid and, for deletions,
      * ->lastenrolment (true when it is the person's only enrolment in the course) and
      * ->courseinfeed.
@@ -88,7 +99,9 @@ class tool_suspensions {
         if (!$ids) {
             return $result;
         }
-        $rows = $action === self::DELETE_ELSEWHERE ? self::elsewhere_rows($course, $ids) : self::tool_rows($course, $ids);
+        $byenrolment = in_array($action, [self::DELETE_ELSEWHERE, self::DELETE_DELETED], true);
+        $rows = $byenrolment ? self::elsewhere_rows($course, $ids) : self::tool_rows($course, $ids);
+        $status = $action === self::DELETE_DELETED ? ENROL_USER_ACTIVE : ENROL_USER_SUSPENDED;
         $feeds = [];
         foreach ($ids as $id) {
             $row = $rows[$id] ?? null;
@@ -96,8 +109,12 @@ class tool_suspensions {
                 $result['skipped'][$id] = self::SKIP_NOTFOUND;
                 continue;
             }
-            if ((int) $row->status !== ENROL_USER_SUSPENDED) {
-                $result['skipped'][$id] = self::SKIP_NOTSUSPENDED;
+            if ((int) $row->status !== $status) {
+                $result['skipped'][$id] = $status === ENROL_USER_ACTIVE ? self::SKIP_NOTACTIVE : self::SKIP_NOTSUSPENDED;
+                continue;
+            }
+            if ($action === self::DELETE_DELETED && empty($row->userdeleted)) {
+                $result['skipped'][$id] = self::SKIP_NOTDELETEDACCOUNT;
                 continue;
             }
             if ($action !== self::REACTIVATE) {
@@ -135,7 +152,7 @@ class tool_suspensions {
     /**
      * Checks again, then deletes the enrolments and records each deletion.
      *
-     * @param string $action self::DELETE (suspension record ids) or self::DELETE_ELSEWHERE (user enrolment ids)
+     * @param string $action self::DELETE (suspension record ids), DELETE_ELSEWHERE or DELETE_DELETED (user enrolment ids)
      * @param \stdClass $course
      * @param int[] $ids
      * @param string $reason optional reason, stored with each deletion
@@ -152,8 +169,8 @@ class tool_suspensions {
             if ($action === self::DELETE) {
                 $DB->update_record(course_data::TABLE, (object) (['id' => $id] + $stamp));
             } else {
-                // Suspended elsewhere: record the deletion, with the enrolment's last change as the
-                // suspension date and no suspending administrator.
+                // Not suspended by this tool: record the deletion, with the enrolment's last change
+                // as the suspension date and no suspending administrator.
                 $DB->insert_record(course_data::TABLE, (object) ($stamp + [
                     'courseid' => $course->id,
                     'userid' => $row->userid,
@@ -213,7 +230,7 @@ class tool_suspensions {
     }
 
     /** @var string Person columns selected with each row; name fields are added by with_names(). */
-    const USERSQL = 'u.username, u.email, u.idnumber AS useridnumber';
+    const USERSQL = 'u.username, u.email, u.idnumber AS useridnumber, u.deleted AS userdeleted';
 
     /**
      * Adds the person's name fields to each row.
@@ -240,8 +257,9 @@ class tool_suspensions {
     }
 
     /**
-     * Why a suspended row can't be deleted now, or null if it can. Sets ->lastenrolment and
-     * ->courseinfeed on rows that can.
+     * Why a row can't be deleted now, or null if it can. Sets ->lastenrolment and
+     * ->courseinfeed on rows that can. A deleted account skips the waiting period and the
+     * feed check: it can't use Moodle, and the feed can no longer list it.
      *
      * @param \stdClass $course
      * @param \stdClass $row
@@ -250,23 +268,26 @@ class tool_suspensions {
      */
     protected static function deletion_skip(\stdClass $course, \stdClass $row, array &$feeds): ?string {
         global $DB;
-        if (self::deletable_from((int) $row->timesuspended)) {
-            return self::SKIP_TOOEARLY;
-        }
-        $feeds[$row->enrol] = $feeds[$row->enrol] ?? self::read_feed($course, $row->enrol);
-        [$reader, $feed] = $feeds[$row->enrol];
-        if (!$feed->available) {
-            return self::SKIP_FEEDUNAVAILABLE;
-        }
-        $userfield = $reader->user_field();
-        $userkey = ['id' => $row->userid, 'idnumber' => $row->useridnumber][$userfield] ?? $row->$userfield;
-        if ($feed->lists((string) $userkey)) {
-            return self::SKIP_LISTED;
+        $row->courseinfeed = false;
+        if (empty($row->userdeleted)) {
+            if (self::deletable_from((int) $row->timesuspended)) {
+                return self::SKIP_TOOEARLY;
+            }
+            $feeds[$row->enrol] = $feeds[$row->enrol] ?? self::read_feed($course, $row->enrol);
+            [$reader, $feed] = $feeds[$row->enrol];
+            if (!$feed->available) {
+                return self::SKIP_FEEDUNAVAILABLE;
+            }
+            $userfield = $reader->user_field();
+            $userkey = ['id' => $row->userid, 'idnumber' => $row->useridnumber][$userfield] ?? $row->$userfield;
+            if ($feed->lists((string) $userkey)) {
+                return self::SKIP_LISTED;
+            }
+            $row->courseinfeed = $feed->course_in_feed();
         }
         $sql = "SELECT COUNT(1) FROM {user_enrolments} ue JOIN {enrol} e ON e.id = ue.enrolid
                  WHERE e.courseid = ? AND ue.userid = ? AND ue.id <> ?";
         $row->lastenrolment = !$DB->count_records_sql($sql, [$course->id, $row->userid, $row->userenrolmentid]);
-        $row->courseinfeed = $feed->course_in_feed();
         return null;
     }
 

@@ -32,6 +32,7 @@ require(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 
 $courseid = required_param('courseid', PARAM_INT);
+$keepupload = array_filter(['upload' => optional_param('upload', '', PARAM_ALPHANUM)]);
 admin_externalpage_setup(
     'local_rvc_enrolment_management_manage',
     '',
@@ -43,9 +44,14 @@ require_sesskey();
 
 $component = 'local_rvc_enrolment_management';
 $course = get_course($courseid);
-$courseurl = new moodle_url('/local/rvc_enrolment_management/course.php', ['id' => $course->id]);
+$courseurl = new moodle_url('/local/rvc_enrolment_management/course.php', ['id' => $course->id] + $keepupload);
 $action = required_param('action', PARAM_ALPHA);
-$actions = [tool_suspensions::REACTIVATE, tool_suspensions::DELETE, tool_suspensions::DELETE_ELSEWHERE];
+$actions = [
+    tool_suspensions::REACTIVATE,
+    tool_suspensions::DELETE,
+    tool_suspensions::DELETE_ELSEWHERE,
+    tool_suspensions::DELETE_DELETED,
+];
 if (!in_array($action, $actions, true)) {
     throw new moodle_exception('invalidparameter', 'debug');
 }
@@ -53,17 +59,17 @@ $deleting = $action !== tool_suspensions::REACTIVATE;
 $methodname = fn(string $method) => get_string('method_' . $method, $component);
 
 // The selection arrives from the course page as ids[], or back from this form as idlist.
-$ids = optional_param_array('ids', [], PARAM_INT);
+$ids = optional_param_array('ids', [], PARAM_INT) ?: optional_param_array('ueids', [], PARAM_INT);
 if (!$ids && ($list = optional_param('idlist', '', PARAM_SEQUENCE)) !== '') {
     $ids = explode(',', $list);
 }
 if (!$ids) {
-    redirect($courseurl, get_string('selectsomeone', $component), null, \core\output\notification::NOTIFY_WARNING);
+    redirect($courseurl, get_string('selectsomeonelist', $component), null, \core\output\notification::NOTIFY_WARNING);
 }
 
 $check = tool_suspensions::check($action, $course, $ids);
 $form = new tool_action_form(
-    new moodle_url('/local/rvc_enrolment_management/action.php', ['courseid' => $course->id]),
+    new moodle_url('/local/rvc_enrolment_management/action.php', ['courseid' => $course->id] + $keepupload),
     [
         'action' => $action,
         'ids' => array_keys($check['eligible']),
@@ -88,7 +94,7 @@ $names = function (array $rows) use ($methodname, $component, $deleting): array 
 $skipnames = function (array $skipped) use ($DB, $component, $action): array {
     $lines = [];
     foreach ($skipped as $id => $reason) {
-        $sql = $action === tool_suspensions::DELETE_ELSEWHERE
+        $sql = in_array($action, [tool_suspensions::DELETE_ELSEWHERE, tool_suspensions::DELETE_DELETED], true)
             ? 'SELECT u.* FROM {user} u JOIN {user_enrolments} ue ON ue.userid = u.id WHERE ue.id = ?'
             : 'SELECT u.* FROM {user} u JOIN {local_rvc_enrolment_management_suspension} s ON s.userid = u.id WHERE s.id = ?';
         $user = $DB->get_record_sql($sql, [$id]);

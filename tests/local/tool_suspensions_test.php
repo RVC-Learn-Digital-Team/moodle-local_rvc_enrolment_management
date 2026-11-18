@@ -36,15 +36,15 @@ final class tool_suspensions_test extends feed_testcase {
     protected $users;
 
     /**
-     * Creates course C1: bob and carol suspended by this tool, dave suspended by something else.
-     * None of them is in the feed.
+     * Creates course C1: bob and carol suspended by this tool, dave suspended by something else,
+     * erin still active. None of them is in the feed.
      */
     protected function setUp(): void {
         global $DB;
         parent::setUp();
         $generator = $this->getDataGenerator();
         $this->course = $generator->create_course(['idnumber' => 'C1']);
-        foreach (['bob', 'carol', 'dave'] as $name) {
+        foreach (['bob', 'carol', 'dave', 'erin'] as $name) {
             $this->users[$name] = $generator->create_user(['username' => "$name@example.com"]);
             $this->enrol_by_database($this->course, $this->users[$name]);
         }
@@ -201,5 +201,57 @@ final class tool_suspensions_test extends feed_testcase {
         $result = tool_suspensions::check(tool_suspensions::DELETE_ELSEWHERE, $this->course, [$this->ueid('bob')]);
 
         $this->assertSame([$this->ueid('bob') => tool_suspensions::SKIP_NOTFOUND], $result['skipped']);
+    }
+
+    /**
+     * An active enrolment of a deleted account is deleted straight away, and recorded.
+     */
+    public function test_deleted_account_deleted_straight_away(): void {
+        global $DB;
+        set_config('deletiondelaydays', 3, 'local_rvc_enrolment_management');
+        $ueid = $this->ueid('erin');
+        $DB->set_field('user', 'deleted', 1, ['id' => $this->users['erin']->id]);
+
+        $result = tool_suspensions::delete(tool_suspensions::DELETE_DELETED, $this->course, [$ueid], 'Account deleted');
+
+        $this->assertSame([$ueid], array_keys($result['done']));
+        $this->assertFalse($DB->record_exists('user_enrolments', ['id' => $ueid]));
+        $record = $DB->get_record(course_data::TABLE, ['userenrolmentid' => $ueid], '*', MUST_EXIST);
+        $this->assertEquals(0, $record->suspendedby);
+        $this->assertSame('Account deleted', $record->deletereason);
+    }
+
+    /**
+     * The deleted-accounts route refuses live accounts and enrolments that aren't active.
+     */
+    public function test_deleted_account_route_refuses_live_and_suspended(): void {
+        global $DB;
+        $DB->set_field('user', 'deleted', 1, ['id' => $this->users['dave']->id]);
+        $ueids = [$this->ueid('erin'), $this->ueid('dave')];
+        $result = tool_suspensions::check(tool_suspensions::DELETE_DELETED, $this->course, $ueids);
+
+        $this->assertSame(tool_suspensions::SKIP_NOTDELETEDACCOUNT, $result['skipped'][$this->ueid('erin')]);
+        $this->assertSame(tool_suspensions::SKIP_NOTACTIVE, $result['skipped'][$this->ueid('dave')]);
+    }
+
+    /**
+     * A suspended enrolment of a deleted account skips the waiting period and the feed check.
+     */
+    public function test_deleted_account_skips_wait_and_feed(): void {
+        global $DB;
+        set_config('deletiondelaydays', 3, 'local_rvc_enrolment_management');
+        set_config('remoteenroltable', 'rvcem_no_such_table', 'enrol_database');
+        $ueid = $this->ueid('dave');
+        $DB->set_field('user_enrolments', 'timemodified', time() - DAYSECS, ['id' => $ueid]);
+        $this->assertSame(
+            [$ueid => tool_suspensions::SKIP_TOOEARLY],
+            tool_suspensions::check(tool_suspensions::DELETE_ELSEWHERE, $this->course, [$ueid])['skipped']
+        );
+
+        $DB->set_field('user', 'deleted', 1, ['id' => $this->users['dave']->id]);
+        $eligible = tool_suspensions::check(tool_suspensions::DELETE_ELSEWHERE, $this->course, [$ueid])['eligible'];
+        $this->assertArrayHasKey($ueid, $eligible);
+        $record = tool_suspensions::check(tool_suspensions::DELETE, $this->course, [$this->recordid('bob')]);
+        $this->assertSame([$this->recordid('bob') => tool_suspensions::SKIP_TOOEARLY], $record['skipped']);
     }
 }

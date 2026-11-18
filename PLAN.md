@@ -22,7 +22,8 @@ Design agreed with Brian on 2026-10-22. Nothing is built yet.
 - **Site administrators only.** Every page and action calls `require_admin()`. There are
   no custom capabilities. A read-only view for other staff would be a separate plugin.
 - **Menus:** Site administration > Plugins > Local plugins > RVC Enrolment Management has
-  only two entries: **Settings** and **Manage enrolments** (renamed from Suspensions on 2026-10-23). There are no links in courses or
+  **Settings**, **Manage enrolments** (renamed from Suspensions on 2026-10-23) and, since
+  2026-10-29, **Upload enrolment list**. There are no links in courses or
   anywhere else.
 - **Both methods are in scope:** core `database` and CoSector `databaseextendedv2`.
 - **Any enrolled person** can be suspended, whatever their role.
@@ -122,6 +123,8 @@ contain one. Host, user and password never appear.
   and last-access record there.
 - Enrolments suspended by anything else can be deleted, but not re-activated, by this
   tool. (Until 2026-10-24 they were shown for information only.)
+- Enrolments of deleted Moodle accounts are the exception: they can be deleted straight
+  away, active or suspended, with no waiting period and no feed check (Brian, 2026-11-18).
 
 ### Record
 
@@ -232,6 +235,31 @@ its effect.
       2026-10-23 (v0.4.0) with 5 more PHPUnit tests.
 - [x] **M5a Delete enrolments suspended elsewhere,** with an optional reason for every
       deletion (Brian, 2026-10-24). Built as v0.5.0 (version 2026102400).
+- [x] **M5b Collapsible lists and CSV upload** (Brian, 2026-10-29), v0.6.0 (version
+      2026102901):
+      - Each course-page list expands and collapses; only "can be suspended" starts open.
+      - Upload enrolment list takes a CSV with a header row and two columns: userid or
+        email, and courseid, idnumber or shortname. Every row must name one course,
+        otherwise the file is refused.
+      - The course page then shows only those people, in the same lists and with the
+        same rules, plus a "Not suspendable" list (no Database or Extended enrolment,
+        person not found, or line unreadable).
+      - The list is kept in the session (the last 5 uploads); the file itself is not kept.
+      - Suspend and re-activate are both available on the uploaded list (Brian, 2026-10-29).
+- [x] **M5c User feedback** (2026-11-18), v0.6.1 (version 2026111800):
+      - Names link to the person's profile in a new tab.
+      - The people filters are one form: method, role, account (active, suspended or
+        deleted) and name or email (every word must appear). They apply to every list,
+        including the uploaded-list view.
+      - Lists with more than 10 rows repeat their buttons above the table.
+      - Every people list shows the account column.
+      - Pressing a list's button with nothing ticked in that list now says so, instead of
+        the misleading "Select at least one person to suspend".
+      - Deleted accounts (Brian, 2026-11-18; v0.6.2, version 2026111801): enrolments of
+        Moodle accounts that have been deleted can be deleted straight away, without
+        suspending first, without the waiting period and without a feed check. Active ones
+        are deleted from "Not in the feed" with "Delete selected deleted accounts";
+        suspended ones from their usual list, where "Can be deleted from" reads "Now".
 - [ ] **M6 learn-uat validation** against `Moodle_Snapshot_UAT` and the extended feed.
       Checklist below.
 - [ ] **Playground rerun:** once Brian has installed the plugin through

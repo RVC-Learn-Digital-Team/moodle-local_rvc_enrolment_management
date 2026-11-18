@@ -54,4 +54,11 @@ if ($hassiteconfig) {
         new moodle_url('/local/rvc_enrolment_management/index.php'),
         'moodle/site:config'
     ));
+
+    $ADMIN->add($component, new admin_externalpage(
+        $component . '_upload',
+        new lang_string('uploadlist', $component),
+        new moodle_url('/local/rvc_enrolment_management/upload.php'),
+        'moodle/site:config'
+    ));
 }
