@@ -174,7 +174,10 @@ $person = fn(stdClass $row) => html_writer::link(
 ) . html_writer::div(s($row->username), 'small text-muted');
 $account = function (stdClass $row) use ($component): string {
     $state = people_filter::account($row);
-    return $state === 'active' ? '' : html_writer::span(get_string('account' . $state, $component), 'badge bg-warning text-dark');
+    $label = get_string('account' . $state, $component);
+    // Badge classes for both Bootstrap 4 (Moodle 4.5) and Bootstrap 5 themes.
+    $classes = $state === 'active' ? 'text-muted' : 'badge badge-warning bg-warning text-dark';
+    return html_writer::span($label, $classes);
 };
 
 // Each list can be expanded or collapsed; only "can be suspended" starts expanded.
@@ -199,7 +202,7 @@ $master = new \core\output\checkbox_toggleall('rvcem-suspend', true, [
     'id' => 'rvcem-selectall',
     'name' => 'selectall',
     'label' => get_string('selectall'),
-    'labelclasses' => 'visually-hidden',
+    'labelclasses' => 'sr-only visually-hidden',
 ]);
 $table->head = [
     $OUTPUT->render($master),
@@ -223,7 +226,7 @@ foreach ($reviews as $method => $review) {
             'name' => 'ueids[]',
             'value' => $ueid,
             'label' => fullname($row),
-            'labelclasses' => 'visually-hidden',
+            'labelclasses' => 'sr-only visually-hidden',
         ]);
         $table->data[] = [
             $OUTPUT->render($tick),
@@ -253,7 +256,7 @@ if (!$table->data) {
             'formaction' => $deleteurl->out(false),
             'name' => 'action',
             'value' => tool_suspensions::DELETE_DELETED,
-            'class' => 'btn btn-danger ms-2',
+            'class' => 'btn btn-danger ml-2 ms-2',
         ]);
     }
     $body = $form($confirmurl, $table, $button);
@@ -300,13 +303,13 @@ $tickbox = fn(string $group, int $value, stdClass $row) => $OUTPUT->render(new \
     'name' => 'ids[]',
     'value' => $value,
     'label' => fullname($row),
-    'labelclasses' => 'visually-hidden',
+    'labelclasses' => 'sr-only visually-hidden',
 ]));
 $selectall = fn(string $group) => $OUTPUT->render(new \core\output\checkbox_toggleall($group, true, [
     'id' => $group . '-selectall',
     'name' => $group . '-selectall',
     'label' => get_string('selectall'),
-    'labelclasses' => 'visually-hidden',
+    'labelclasses' => 'sr-only visually-hidden',
 ]));
 $actionbuttons = function (array $buttons) use ($component): string {
     $html = '';
@@ -315,7 +318,7 @@ $actionbuttons = function (array $buttons) use ($component): string {
             'type' => 'submit',
             'name' => 'action',
             'value' => $action,
-            'class' => "btn $class me-2",
+            'class' => "btn $class mr-2 me-2",
         ]);
     }
     return $html;
